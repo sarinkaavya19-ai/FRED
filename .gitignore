@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data - Large datasets (use DVC instead)
+ferd-sprint/data/datasets/fer2013/processed/images/
+ferd-sprint/data/datasets/fer2013/raw/
+*.mp4
+*.avi
+*.mov
+
+# Model weights
+*.pt
+*.pth
+*.onnx
+*.tflite
+*.bin
+*.safetensors
+
+# Logs
+*.log
+wandb/
+lightning_logs/
+
+# Cache
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Environment
+.env
+*.env
