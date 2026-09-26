@@ -109,3 +109,130 @@ ferd-core/
 * **Peak Memory Footprint:** $\le 180\text{ MB RAM}$ during inference execution.
 * **Model Security:** Signed model binaries (Ed25519) verified prior to inference initialization.
 * **Data Privacy:** On-device processing by default; zero raw frame network retention or transmission.
+
+Prerequisites
+# 1. Clone and navigate
+git clone https://github.com/sarinkaavya19-ai/FRED.git
+cd FRED/ferd-sprint
+
+# 2. Verify environment (should already be set up)
+python -c "import torch, timm, mediapipe, cv2; print('OK')"
+Option 1: Pre-recorded Video Demo (Safest, Recommended)
+# Run the inference pipeline on the test clip
+python inference_demo.py
+What you'll see: 60-frame test clip (15 frames each: Disgust, Fear, Surprise, Neutral) processed through full pipeline. Console shows per-frame predictions with confidence.
+Option 2: Interactive Temporal Smoothing Demo (Webcam)
+# Requires webcam; press keys during demo:
+python demo_temporal.py
+Controls during demo:
+Key	Action
+q	Quit
+t	Toggle TEMPORAL (GRU) ↔ SINGLE-FRAME
+h	Toggle confidence history plot
+b	Toggle bounding box
+s	Screenshot
+What you'll see: Live webcam feed with:
+- Face bounding box
+- Top emotion + confidence %
+- 7-class probability bars
+- Confidence history plot (scrolling)
+- Mode indicator (TEMPORAL vs SINGLE-FRAME)
+Option 3: Basic Demo Harness (Webcam/Video/Image)
+# Webcam
+python demo.py
+
+# Or video file
+python demo.py --source video --video test_emotion_clip.mp4
+
+# Or single image
+python demo.py --source image --image path/to/face.jpg
+
+# Force dummy mode (no model)
+python demo.py --dummy
+Option 4: Automated Rehearsal (Two Consecutive Runs)
+# Runs full 6-minute demo script twice back-to-back
+python rehearsal.py
+What it does: Automated run through all 7 demo sections (PMD framing → Input → Single-frame → Temporal → Occlusion → No-face → Scope statement), timing each run.
+Option 5: Run Edge Case Tests
+# Tests 6 edge cases: blank, low light, overexposed, extreme pose, occlusion, baseline
+python test_edge_cases.py
+Expected: All 6 PASS (no crashes, graceful degradation)
+Option 6: Verify Pipeline Components Individually
+# 1. Face alignment only
+python -c "
+from preprocessing.face_align import FaceAligner
+import cv2
+cap = cv2.VideoCapture(0)
+ret, frame = cap.read()
+cap.release()
+a = FaceAligner(running_mode='IMAGE')
+r = a.align(frame)
+print('Face align:', 'OK' if r.success else r.error)
+a.close()
+"
+
+# 2. Encoder only
+python -c "
+import torch
+from models.encoder.mobilevit import create_mobilevit_encoder
+e = create_mobilevit_encoder('mobilevit_xs', pretrained=True, freeze=True)
+x = torch.randn(1,3,224,224)
+with torch.no_grad(): out = e(x)
+print('Encoder:', out.shape)  # Should be (1, 256)
+"
+
+# 3. SAFM only
+python -c "
+import numpy as np
+from models.safm.attention_mask import create_heuristic_safm
+s = create_heuristic_safm()
+img = np.random.rand(224,224,3).astype(np.float32)
+lm = np.zeros((478,2)); lm[:,0]=112; lm[:,1]=112
+mask, conf = s.generate_mask(img, lm)
+print('SAFM mask:', mask.shape, 'range:', mask.min(), '-', mask.max())
+"
+
+# 4. Full pipeline (streaming)
+python -c "
+import torch
+from pipeline import create_streaming_pipeline
+p = create_streaming_pipeline()
+p.eval()
+x = torch.randn(1,3,224,224)
+lm = torch.zeros(1,478,2)
+vis = torch.ones(1,478)
+with torch.no_grad(): r = p.step(x, lm, vis)
+print('Pipeline:', r['probs'].shape, 'pred:', r['pred_class'].item())
+"
+Expected Outputs
+Test	Success Indicator
+inference_demo.py	Console shows 49/60 frames processed, predictions printed
+demo_temporal.py	OpenCV window opens, shows face bbox + emotion + prob bars
+rehearsal.py	Completes 2 runs, prints timing summary
+test_edge_cases.py	All 6 tests PASS, no crashes
+Troubleshooting
+Issue	Fix
+ModuleNotFoundError	Run from ferd-sprint/ directory or add to sys.path
+Webcam not detected	Check cv2.VideoCapture(0) index; try 1, 2
+Slow model loading	First run downloads MobileViT weights (~2MB); subsequent runs cached
+Low FPS on CPU	Expected (~3-5 FPS); use pre-recorded demo for presentations
+Unicode errors	Scripts use ASCII-safe output; ignore terminal encoding warnings
+File Structure Reference
+ferd-sprint/
+├── demo.py              # Basic demo harness (webcam/video/image)
+├── demo_temporal.py     # Temporal smoothing demo with toggles
+├── inference_demo.py    # Pre-recorded clip inference
+├── rehearsal.py         # Automated 2× demo rehearsal
+├── test_edge_cases.py   # Edge case hardening tests
+├── pipeline.py          # Core pipeline (batch + streaming)
+├── preprocessing/face_align.py
+├── models/
+│   ├── encoder/mobilevit.py
+│   ├── safm/attention_mask.py + region_confidence.py
+│   ├── temporal/gru_head.py
+│   └── heads/classification_head.py
+├── data/dataset.py      # FER2013 DataLoader
+└── data/datasets/fer2013/processed/
+    ├── split.json       # Train/val/test split
+    └── images/          # 35,887 images by class
+
